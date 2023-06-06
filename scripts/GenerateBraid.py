@@ -35,11 +35,15 @@ class Params:
         self.alpha = 72         # pitch angle (degrees)
         self.z_max = 145        # endpoint of z axis (mm)
         self.resolution = 150   # number of points per curve (count)
-        
+
         # Parse command line arguments
         if len(sys.argv) > 1:
             self.set_from_args()
             
+        # Set path along which to construct braid (default along z axis)
+        path_func = lambda t: (0.00001*t, 0.00001*t, t)
+        self.set_path(path_func, (0, self.z_max))
+        
         # Calculate derived paramaters
         self.get_derived_params()
         
@@ -99,6 +103,10 @@ class Params:
             print('Odd number of carriers provided for parameter c. Assuming that value refers to number of carriers per direction.')
             self.c *= 2
             
+    def set_path(self, func, t_range):
+        self.path = Path()
+        self.path.set_from_function(func, t_range, self.resolution + 1)  ### this could cause issues if Params.resolution is changed after creating the path.
+            
             
 class Braid:
     def __init__(self, params):
@@ -132,7 +140,7 @@ class Braid:
                 if self.params.verbose:
                     print(f'\n\tCARRIER {i}')
                 
-                phi_offset = self.params.d * (self.params.n - 1) / (2 * self.params.s)
+                phi_offset = self.params.d * (self.params.n - 1) / (2 * self.params.s)  #should include np.sin(self.params.alpha) term in denominator
                 wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, self.params.n, endpoint=True)
                 
                 # loop over wires
@@ -144,6 +152,14 @@ class Braid:
                     x = self.params.s * np.cos(sign * self.params.w * t + wire_phi)
                     y = self.params.s * np.sin(sign * self.params.w * t + wire_phi)
                     r = np.array([x, y, z])
+                    
+                    # apply rotation if following curve
+                    if self.params.path != None:
+                        for k, point in enumerate(r.T):
+                            rotation = self.params.path.rotations[k]
+                            new_point = self.params.path.nodes[k] + np.dot(rotation, np.array([x[k], y[k], 0]))
+                            r.T[k] = new_point
+                    
                     
                     # store save data
                     self.data.append((chirality, i, j, r.T))
@@ -174,6 +190,48 @@ class Braid:
                 
     def plot(self):
         Plotting.plot(self)
+        
+        
+class Path:
+    def __init__(self):
+        pass
+    
+    def set_from_points(self, points):
+       
+        self.xhat = np.array([1,0,0])
+        self.yhat = np.array([0,1,0])
+        self.zhat = np.array([0,0,1])
+
+        self.nodes = []
+        self.normals = []
+        self.rotations = []
+        
+        for p0, p1 in zip(points[:-1], points[1:]):
+            node = (p0 + p1) / 2
+            normal = Vector.norm(p1 - p0)
+            rotation = self.get_rotation_matrix(self.zhat, normal)
+            self.nodes.append(node)
+            self.normals.append(normal)
+            self.rotations.append(rotation)
+    
+    def set_from_function(self, func, t_range, resolution):
+        t = np.linspace(t_range[0], t_range[1], resolution)
+        points = np.array(func(t)).T
+        self.set_from_points(points)
+    
+    def get_rotation_matrix(self, a, b):
+        # Rotates z direction to align with helix axis
+        G = np.zeros((3,3))
+        G[0,0] = np.dot(a,b)
+        G[1,0] = Vector.mag(np.cross(a, b))
+        G[0,1] = -1*G[1,0]
+        G[1,1] = G[0,0]
+        G[2,2] = 1
+        
+        Fi = np.array([a, Vector.norm(b - np.dot(a, b) * a), np.cross(b, a)]).T
+        F = np.linalg.inv(Fi)
+        U = np.dot(Fi, np.dot(G, F))
+        return U
 
 
 class Plotting:
@@ -257,14 +315,31 @@ points per helix,{braid.params.resolution}"""
         config_file.write(config_text)
         config_file.close()
           
-        
+
+class Vector:
+    @staticmethod
+    def mag(a):
+        return np.sqrt(np.sum(a ** 2))
+    
+    @staticmethod
+    def norm(a):
+        return a / Vector.mag(a)
+
         
         
 if __name__ == '__main__':
+    path_func = lambda t: (4*16*np.sin(t)**3, 4*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)), 0*np.sin(t))
+    #path = Path()
+    #path.set_from_function(path_func, (0, 10), 151)
+    
     params = Params()
+    params.resolution = 2000
+    params.set_path(path_func, (0, 2*np.pi))
     
     #params.verbose = True
-    #params.plotting = True
+    params.plotting = True
+    params.saving = False
     #params.plot_mode = Params.SURFACES
+
     
     braid = Braid(params)
