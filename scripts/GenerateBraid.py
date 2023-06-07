@@ -23,7 +23,7 @@ class Params:
         self.param_mode = Params.PITCH_ANGLE  # determine parameters using either pitch angle or picks (crossings per mm)
         self.plot_mode = Params.LINES         # plot showing individual wires (LINES) or carrier ribbons (SURFACES)
         self.plotting = False                 # visualize braid in matplotlib
-        self.saving = True                   # save output files for use in Discovery
+        self.saving = True                    # save output files for use in Discovery
         self.verbose = False                  # provide detailed output to monitor braid construction
     
         # Input parameters (only alpha *or* p required; choose using "param_mode" above)
@@ -103,9 +103,11 @@ class Params:
             print('Odd number of carriers provided for parameter c. Assuming that value refers to number of carriers per direction.')
             self.c *= 2
             
-    def set_path(self, func, t_range):
+    def set_path(self, func, t_range, equidistant=False):
         self.path = Path()
         self.path.set_from_function(func, t_range, self.resolution + 1)  ### this could cause issues if Params.resolution is changed after creating the path.
+        if equidistant:
+            self.path.calc_equidistant_nodes(self.resolution)
             
             
 class Braid:
@@ -153,7 +155,7 @@ class Braid:
                     y = self.params.s * np.sin(sign * self.params.w * t + wire_phi)
                     r = np.array([x, y, z])
                     
-                    # apply rotation if following curve
+                    # apply rotation if following a path
                     if self.params.path != None:
                         for k, point in enumerate(r.T):
                             rotation = self.params.path.rotations[k]
@@ -197,9 +199,6 @@ class Path:
         pass
     
     def set_from_points(self, points):
-       
-        self.xhat = np.array([1,0,0])
-        self.yhat = np.array([0,1,0])
         self.zhat = np.array([0,0,1])
 
         self.nodes = []
@@ -215,12 +214,16 @@ class Path:
             self.rotations.append(rotation)
     
     def set_from_function(self, func, t_range, resolution):
+        self.func = func
+        self.t_range = t_range
+        self.resolution = resolution
+        
         t = np.linspace(t_range[0], t_range[1], resolution)
         points = np.array(func(t)).T
         self.set_from_points(points)
     
     def get_rotation_matrix(self, a, b):
-        # Rotates z direction to align with helix axis
+        # Rotates vector a to vector b
         G = np.zeros((3,3))
         G[0,0] = np.dot(a,b)
         G[1,0] = Vector.mag(np.cross(a, b))
@@ -232,6 +235,73 @@ class Path:
         F = np.linalg.inv(Fi)
         U = np.dot(Fi, np.dot(G, F))
         return U
+    
+    def get_total_length(self):
+        total_length = 0
+        for i in range(1, len(self.nodes)):
+            total_length += Vector.mag(self.nodes[i] - self.nodes[i-1])
+        return total_length
+    
+    def refine(self, factor):
+        # remake mesh with resolution increased by given integer factor
+        self.set_from_function(self.func, self.t_range, self.resolution * factor)
+        """self.nodes_refined = [self.nodes[0]]
+        self.normals_refined = [self.normals[0]]
+        self.rotations_refined = [self.rotations[0]]
+        
+        for i in range(1, len(self.nodes)):
+            n1, n0 = self.nodes[i] - self.nodes[i-1]
+            for j in range(1, factor):
+                frac = j / factor
+                new_node = (1 - frac) * n0 + frac * n1
+                
+                self.nodes_refined.append(new_node)
+                self.normals_refined.append(self.normals[i])"""
+            
+    
+    def calc_equidistant_nodes(self, resolution):
+        total_length = self.get_total_length()
+        interval = total_length / resolution
+        
+        largest_segment = max([Vector.mag(self.nodes[i] - self.nodes[i-1]) for i in range(1, len(self.nodes))])
+        refine_factor = int(np.ceil(largest_segment / interval))
+        print('refinement factor: ', refine_factor)
+        
+        self.refine(refine_factor)
+        
+        length_since_last = 0
+        
+        self.nodes_eq = [self.nodes[0]]
+        self.normals_eq = [self.normals[0]]
+        self.rotations_eq = [self.rotations[0]]
+                
+        for i in range(1, len(self.nodes)):
+            n1, n0 = self.nodes[i], self.nodes[i-1]
+            segment_length = Vector.mag(n1 - n0)
+            
+            if length_since_last + segment_length >= interval:
+                diff = interval - length_since_last
+                frac = diff / segment_length
+                
+                new_node = (1 - frac) * n0 + frac * n1
+                new_normal = Vector.norm(new_node - n0)
+                new_rotation = self.get_rotation_matrix(self.zhat, new_normal)
+                
+                self.nodes_eq.append(new_node)
+                self.normals_eq.append(new_normal)
+                self.rotations_eq.append(new_rotation)
+                
+                length_since_last = (1 - frac) * segment_length
+                
+            else:
+                length_since_last += segment_length
+                
+        self.nodes_old = self.nodes
+        self.normals_old = self.normals
+        self.rotations_old = self.rotations
+        self.nodes = self.nodes_eq
+        self.normals = self.normals_eq
+        self.rotations = self.rotations_eq
 
 
 class Plotting:
@@ -328,18 +398,20 @@ class Vector:
         
         
 if __name__ == '__main__':
-    path_func = lambda t: (4*16*np.sin(t)**3, 4*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)), 0*np.sin(t))
-    #path = Path()
-    #path.set_from_function(path_func, (0, 10), 151)
+    heart = {'range': (0, 2*np.pi), 'func': lambda t: (4*16*np.sin(t)**3, 4*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)), 0*np.sin(t))}
+    spiral = {'range': (0, 50), 'func': lambda t: (0.1 * t * np.cos(t), 0.1 * t * np.sin(t), t)}
+    quartic = {'range': (-2, 2), 'func': lambda t: (t, t**4, 0*t)}
+
+    path_func = quartic
     
     params = Params()
     params.resolution = 2000
-    params.set_path(path_func, (0, 2*np.pi))
+    params.set_path(path_func['func'], path_func['range'], equidistant=False)
     
     #params.verbose = True
     params.plotting = True
     params.saving = False
-    #params.plot_mode = Params.SURFACES
+    params.plot_mode = Params.SURFACES
 
     
     braid = Braid(params)
