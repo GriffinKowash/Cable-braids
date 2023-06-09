@@ -99,17 +99,24 @@ class Params:
             print('Odd number of carriers provided for parameter c. Assuming that value refers to number of carriers per direction.')
             self.c *= 2
             
-    def set_path(self, func=None, t_range=None, equidistant=False):
+    def set_path_from_function(self, func=None, t_range=None, equidistant=False):
         if func == None and t_range == None:
             # set default path along positive z axis
             func = lambda t: (1e-9*t, 1e-9*t, t)
             t_range = (0, self.z_max)
         
         self.path = Path()
-        self.path.set_from_function(func, t_range, self.resolution + 1)  ### this could cause issues if Params.resolution is changed after creating the path.
+        self.path.set_from_function(func, t_range, self.resolution + 1, equidistant)  ### this could cause issues if Params.resolution is changed after creating the path.
         if equidistant:
-            self.path.calc_equidistant_nodes(self.resolution)
-            
+            self.path.calc_equidistant_nodes(self.resolution, mode='function')
+        
+    def set_path_from_file(self, filepath, equidistant=False):      
+        self.path = Path()
+        self.path.set_from_file(filepath)
+        self.resolution = self.path.resolution # disastrous
+        if equidistant:
+            self.path.calc_equidistant_nodes(self.resolution, mode='points')
+           
             
 class Braid:
     def __init__(self, params):
@@ -156,6 +163,8 @@ class Braid:
                     y = self.params.s * np.sin(sign * self.params.w * t + wire_phi)
                     r = np.array([x, y, z])
                     
+                    print('r shape: ', r.shape)
+                    
                     # apply rotation if following a path
                     if self.params.path != None:
                         for k, point in enumerate(r.T):
@@ -199,7 +208,8 @@ class Path:
     def __init__(self):
         pass
     
-    def set_from_points(self, points):
+    def set_from_points(self, points, equidistant=False):
+        self.resolution = points.shape[0] - 1
         self.zhat = np.array([0,0,1])
 
         self.nodes = []
@@ -219,15 +229,23 @@ class Path:
         self.rotations = np.array(self.rotations)
             
         self.length = self.get_total_length()
+        
+        if equidistant:
+            self.calc_equidistant_nodes(points.shape[0])
     
-    def set_from_function(self, func, t_range, resolution):
+    def set_from_function(self, func, t_range, resolution, equidistant=False):
         self.func = func
         self.t_range = t_range
         self.resolution = resolution
         
         t = np.linspace(t_range[0], t_range[1], resolution)
         points = np.array(func(t)).T
-        self.set_from_points(points)
+        self.set_from_points(points, equidistant)
+        
+    def set_from_file(self, filepath, equidistant=False):
+        points = np.loadtxt(filepath)
+        self.t_range = (-50, 50)  #terrible hack to make this poorly-designed code work
+        self.set_from_points(points, equidistant)
     
     def get_rotation_matrix(self, a, b):
         # Rotates vector a to vector b
@@ -254,25 +272,24 @@ class Path:
             
         return np.sum(np.sqrt(np.sum(np.power(diff, 2), axis=1)))
         
-    
-    def refine(self, factor):
+    def refine(self, factor, mode='function'):
         # remake mesh with resolution increased by given integer factor
-        self.set_from_function(self.func, self.t_range, self.resolution * factor)
-        """self.nodes_refined = [self.nodes[0]]
-        self.normals_refined = [self.normals[0]]
-        self.rotations_refined = [self.rotations[0]]
-        
-        for i in range(1, len(self.nodes)):
-            n1, n0 = self.nodes[i] - self.nodes[i-1]
-            for j in range(1, factor):
-                frac = j / factor
-                new_node = (1 - frac) * n0 + frac * n1
-                
-                self.nodes_refined.append(new_node)
-                self.normals_refined.append(self.normals[i])"""
+        if mode == 'function':
+            self.set_from_function(self.func, self.t_range, self.resolution * factor)  
             
+        elif mode == 'points':
+            new_nodes = [self.nodes[0]]
+            for i in range(1, len(self.nodes)):
+                n1, n0 = self.nodes[i], self.nodes[i-1]
+                to_n1 = n1 - n0
+                for j in range(1, factor + 1):
+                    new_nodes.append(n0 + to_n1 * j / factor)
+            self.nodes = np.array(new_nodes)
+            
+        else:
+            print(f'Unsupported mode {mode} in Path.refine.')
     
-    def calc_equidistant_nodes(self, resolution):
+    def calc_equidistant_nodes(self, resolution, mode='function'):
         interval = self.length / (resolution)
         
         largest_segment = max([Vector.mag(self.nodes[i] - self.nodes[i-1]) for i in range(1, len(self.nodes))])
@@ -283,7 +300,7 @@ class Path:
         self.normals_old = self.normals
         self.rotations_old = self.rotations
         
-        self.refine(refine_factor)
+        self.refine(refine_factor, mode)
         
         interval = self.length / (resolution)  # refine length estimate
 
@@ -515,16 +532,16 @@ if __name__ == '__main__':
     path_func = quartic
     
     params = Params()
-    params.resolution = 1000
-    params.set_path(path_func['func'], path_func['range'], equidistant=True)
-    #params.set_path()
+    params.resolution = 300
+    #params.set_path_from_function(path_func['func'], path_func['range'], equidistant=True)
+    params.set_path_from_file('C:\\Users\\griffin.kowash\\AppData\\Local\\Temp\\braids_spline_test\\path_data.csv', equidistant=True)
     #params.verbose = True
-    params.plotting = False
-    params.saving = False
+    params.plotting = True
+    params.saving = True
     #params.plot_mode = Params.SURFACES
 
     
     braid = Braid(params)
     #braid.params.path.plot_xy_nodes(skip=1, both=False)#max(1, int(params.resolution/100)))
-    braid.params.path.plot_node_spacing(equidistant=True)
+    #braid.params.path.plot_node_spacing(equidistant=True)
     
