@@ -35,6 +35,7 @@ class Params:
         self.alpha = 72         # pitch angle (degrees)
         self.z_max = 145        # endpoint of z axis (mm)
         self.resolution = 150   # number of points per curve (count)
+        self.set_from_file = True # *need* to restructure this!!
 
         # Parse command line arguments
         if len(sys.argv) > 1:
@@ -46,7 +47,7 @@ class Params:
     def set_from_args(self):
         # Command line parameters
         arg_str = "s:c:n:d:a:z:r:p:m:f:v:o:"
-        arg_list = ['plot', 'plotmode =', 'save', 'verbose', 'outdir =']
+        arg_list = ['plot', 'plotmode =', 'save', 'verbose', 'outdir =', 'fromfile']
         options, args = getopt.getopt(sys.argv[1:], arg_str, arg_list)
 
         for opt, arg in options:
@@ -80,6 +81,8 @@ class Params:
                 self.verbose = True
             elif opt in ['-o', '--outdir ']:
                 self.output_dir = arg
+            elif opt in ['--fromfile']:
+                self.set_from_file = True
             else:
                 print(f'Unknown option {opt} provided.')
     
@@ -470,7 +473,7 @@ class Saving:
             print(f'Created output directory at {braid.params.output_dir}')
             
         else:
-            if len(os.listdir(braid.params.output_dir)) != 0:
+            if len(os.listdir(braid.params.output_dir)) > 2:
                 if 'y' in input('Output directory is not empty. Overwrite data? [y/n] ').lower():
                     for file_name in os.listdir(braid.params.output_dir):
                         file = braid.params.output_dir + file_name
@@ -503,7 +506,7 @@ points per helix,{braid.params.resolution}"""
         config_file.write(config_text)
         config_file.close()
           
-
+        
 class Vector:
     @staticmethod
     def mag(a):
@@ -519,29 +522,32 @@ class Vector:
         else:
             return a / Vector.mag(a)[:, np.newaxis]
 
+
         
         
-if __name__ == '__main__':
-    heart = {'range': (0, 2*np.pi), 'func': lambda t: (4*16*np.sin(t)**3, 4*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)), 0*np.sin(t))}
-    spiral = {'range': (0, 50), 'func': lambda t: (0.1 * t * np.cos(t), 0.1 * t * np.sin(t), t)}
-    square_root = {'range': (0, 10), 'func': lambda t: (t, 5*t**0.5, 0*t)}
-    parabola = {'range': (-10, 10), 'func': lambda t: (t, 0.02*10*t**2, 0*t)}
-    quartic = {'range': (-2, 2), 'func': lambda t: (t, 0.25 * t**4, 0*t)}
-    worm = {'range': (0, 16), 'func': lambda t: (0*t, 6*np.sin(t), t)}
+#if __name__ == '__main__':
+heart = {'range': (0, 2*np.pi), 'func': lambda t: (4*16*np.sin(t)**3, 4*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t)), 0*np.sin(t))}
+spiral = {'range': (0, 50), 'func': lambda t: (0.1 * t * np.cos(t), 0.1 * t * np.sin(t), t)}
+square_root = {'range': (0, 10), 'func': lambda t: (t, 5*t**0.5, 0*t)}
+parabola = {'range': (-10, 10), 'func': lambda t: (t, 0.02*10*t**2, 0*t)}
+quartic = {'range': (-2, 2), 'func': lambda t: (t, 0.25 * t**4, 0*t)}
+worm = {'range': (0, 16), 'func': lambda t: (0*t, 6*np.sin(t), t)}
 
-    path_func = quartic
-    
-    params = Params()
-    params.resolution = 300
-    #params.set_path_from_function(path_func['func'], path_func['range'], equidistant=True)
-    params.set_path_from_file('C:\\Users\\griffin.kowash\\AppData\\Local\\Temp\\braids_spline_test\\path_data.csv', equidistant=True)
-    #params.verbose = True
-    params.plotting = True
-    params.saving = True
-    #params.plot_mode = Params.SURFACES
+path_func = quartic
 
-    
-    braid = Braid(params)
-    #braid.params.path.plot_xy_nodes(skip=1, both=False)#max(1, int(params.resolution/100)))
-    #braid.params.path.plot_node_spacing(equidistant=True)
+params = Params()
+#params.resolution = 300
+params.set_path_from_function(path_func['func'], path_func['range'], equidistant=True)
+#params.set_from_spline
+#if params.set_from_file:
+#    params.set_path_from_file(params.output_dir + '\\path_data.csv', equidistant=True)
+#params.verbose = True
+params.plotting = True
+params.saving = False
+#params.plot_mode = Params.SURFACES
+
+
+braid = Braid(params)
+#braid.params.path.plot_xy_nodes(skip=1, both=False)#max(1, int(params.resolution/100)))
+#braid.params.path.plot_node_spacing(equidistant=True)
     

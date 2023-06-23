@@ -5,8 +5,8 @@ import time
 import string
 
 SOURCE_DIR = 'C:\\Users\\griffin.kowash\\AppData\\Local\\Temp\\braids\\braid_data'
-SCRIPT_DIR = 'C:\\Users\\griffin.kowash\\Documents\\Projects\\Cable braiding'
-SCRIPT_NAME = 'generate_braid_data_refactored.py'
+SCRIPT_DIR = 'C:\\Users\\griffin.kowash\\Documents\\Projects\\Cable braids'
+SCRIPT_NAME = 'GenerateBraid.py'
 SCALE = 0.001  # convert mm to m
 
 load_external = False
