@@ -9,6 +9,7 @@ import os, time
 import numpy as np
 import matplotlib.pyplot as plt
 from path import Path
+from spline import Spline
 
             
 class Braid:
@@ -47,8 +48,16 @@ class Braid:
         self.pitch = 8 * np.pi**2 *  self.s**2 * self.p / self.c     # pitch height (mm)
         self.carrier_width = self.d * self.n                         # width of each carrier (mm)
     
-    def set_path_from_spline(self):
-        pass
+    def set_path_from_spline_file(self, filepath, resolution, equidistant=False): #deprecated
+        spline = Spline()
+        spline.set_from_file(filepath)
+        points = spline.get_points(resolution)
+        self.path.set_from_points(points, equidistant)
+        
+    def set_path_from_spline(self, params, resolution, equidistant=False):
+        spline = Spline(params)
+        points = spline.get_points(resolution)
+        self.path.set_from_points(points, equidistant)
     
     def set_path_from_function(self, func, t_range, resolution, equidistant=False):
         self.path.set_from_function(func, t_range, resolution, equidistant)
@@ -61,7 +70,6 @@ class Braid:
         
     def set_linear_path_between(self, p0, p1, resolution):
         self.path.set_linear_between(p0, p1, resolution)
-    
     
     def construct(self, verbose=False):
         # Calculate braid
@@ -124,6 +132,7 @@ class Braid:
     
     def save(self, output_dir):
         Saving.save(self, output_dir)
+        
     
     def plot(self, mode='lines', linewidth=1.5):
         Plotting.plot(self, mode, linewidth)
@@ -185,7 +194,7 @@ class Saving:
         cls.save_config(braid, output_dir)
         
         for chirality, carrier, wire, data in braid.data:
-            np.savetxt(f'{braid.params.output_dir}\\data_{chirality}_c{carrier}_w{wire}.csv', data, delimiter=',')
+            np.savetxt(f'{output_dir}\\data_{chirality}_c{carrier}_w{wire}.csv', data, delimiter=',')
     
     @staticmethod
     def check_output_dir(output_dir):
@@ -221,7 +230,7 @@ carrier width (mm),{braid.carrier_width}
 crossing frequency (1/mm),{braid.p}
 pitch angle (degrees),{braid.alpha * 180 / np.pi}
 pitch height (mm),{braid.pitch}
-points per helix,{braid.resolution}"""
+points per helix,{braid.path.resolution}"""
 
         config_file = open(output_dir + '\\config.txt', 'w')
         config_file.write(config_text)

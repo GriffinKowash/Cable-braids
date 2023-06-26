@@ -80,10 +80,12 @@ path_func = heart
 #braid.params.path.plot_xy_nodes(skip=1, both=False)#max(1, int(params.resolution/100)))
 #braid.params.path.plot_node_spacing(equidistant=True)
     
+spline_file = r'C:\Users\griffin.kowash\AppData\Local\Temp\braids_spline_test\spline_data.csv'
 
 braid = Braid()
 braid.set_geometry()
+braid.set_path_from_spline_file(spline_file, 600, equidistant=False)
 #braid.set_path_from_function(path_func['func'], path_func['range'], 600, equidistant=True)
-braid.set_linear_path_between((-10,17,0), (3,44,10), 100)
+#braid.set_linear_path_between((-10,17,0), (3,44,10), 100)
 braid.construct(verbose=False)
 braid.plot(linewidth=3)

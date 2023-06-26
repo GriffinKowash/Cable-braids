@@ -9,7 +9,6 @@ from geomdl import BSpline, convert
 import sys, getopt
 import matplotlib.pyplot as plt
 import numpy as np
-import time
 
 # default settings
 resolution = 300

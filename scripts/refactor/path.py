@@ -11,7 +11,7 @@ from vector import Vector
 
 class Path:
     def __init__(self):
-        pass
+        self.func = None
     
     def set_linear_between(self, p0, p1, resolution):  
         p0, p1 = np.array(p0), np.array(p1)
@@ -19,51 +19,89 @@ class Path:
         dist = Vector.mag(p1 - p0)
         
         points = []
-        for t in np.linspace(0, 1, resolution + 1):  #temporary fix until set_from_points doesn't trim off the endpoints
+        for t in np.linspace(0, 1, resolution):
             points.append(p0 + to_p1 * dist * t)
         
         self.set_from_points(points)
     
-    def set_from_points(self, points, equidistant=False):
-        points = np.array(points)
-        self.resolution = points.shape[0] - 1
-        print('resolution: ', self.resolution)
-        self.zhat = np.array([0,0,1])
+    def set_from_points(self, points, equidistant=False, testing=True):        
+        if not testing:
+            points = np.array(points)
+            self.resolution = points.shape[0] - 1
+            print('resolution: ', self.resolution)
+            self.zhat = np.array([0,0,1])
+    
+            self.nodes = []
+            self.normals = []
+            self.rotations = []
+                        
+            for p0, p1 in zip(points[:-1], points[1:]):
+                node = (p0 + p1) / 2
+                #print(p0, p1)
+                normal = Vector.norm(p1 - p0)
+                #print(normal)
+                rotation = self.get_rotation_matrix(self.zhat, normal)
+                #print(rotation)
+                self.nodes.append(node)
+                self.normals.append(normal)
+                self.rotations.append(rotation)
+                
+            self.nodes = np.array(self.nodes)
+            self.normals = np.array(self.normals)
+            self.rotations = np.array(self.rotations)
+                
+            self.length = self.get_total_length()
+            self.node_lengths = self.get_node_lengths()
+            
+            if equidistant:
+                self.calc_equidistant_nodes(points.shape[0])
+                
+        else:
+            points = np.array(points)
+            self.resolution = points.shape[0]
+            print('resolution: ', self.resolution)
+            self.zhat = np.array([0,0,1])
+    
+            self.nodes = []
+            self.normals = []
+            self.rotations = []
+                        
+            for i in range(self.resolution):                
+                if i == 0:
+                    p0, p1 = points[i], points[i+1]
+                elif i == self.resolution - 1:
+                    p0, p1 = points[i-1], points[i]     
+                else:
+                    p0, p1 = points[i-1], points[i+1]
+                
+                node = points[i]
+                normal = Vector.norm(p1 - p0)  #note that "normal" is normal to desired helix plane; actually tangent to path. Confusing.
+                rotation = self.get_rotation_matrix(self.zhat, normal)
 
-        self.nodes = []
-        self.normals = []
-        self.rotations = []
-        
-        self.func = None
-        
-        for p0, p1 in zip(points[:-1], points[1:]):
-            node = (p0 + p1) / 2
-            print(p0, p1)
-            normal = Vector.norm(p1 - p0)
-            print(normal)
-            rotation = self.get_rotation_matrix(self.zhat, normal)
-            print(rotation)
-            self.nodes.append(node)
-            self.normals.append(normal)
-            self.rotations.append(rotation)
+                self.nodes.append(node)
+                self.normals.append(normal)
+                self.rotations.append(rotation)
+                
+            print('rotations: ', len(self.rotations))
+                
+            self.nodes = np.array(self.nodes)
+            self.normals = np.array(self.normals)
+            self.rotations = np.array(self.rotations)
+                
+            self.length = self.get_total_length()
+            self.node_lengths = self.get_node_lengths()
             
-        self.nodes = np.array(self.nodes)
-        self.normals = np.array(self.normals)
-        self.rotations = np.array(self.rotations)
-            
-        self.length = self.get_total_length()
-        self.node_lengths = self.get_node_lengths()
-        
-        if equidistant:
-            self.calc_equidistant_nodes(points.shape[0])
+            if equidistant:
+                self.calc_equidistant_nodes()
     
     def set_from_function(self, func, t_range, resolution, equidistant=False):
         self.func = func
         self.t_range = t_range
-        
+                
         t = np.linspace(t_range[0], t_range[1], resolution)
         points = np.array(func(t)).T
         self.set_from_points(points, equidistant)
+        
         
     def set_from_file(self, filepath, equidistant=False):
         points = np.loadtxt(filepath)
@@ -95,6 +133,9 @@ class Path:
         if t1 == -1:
             diff = self.nodes[t0+1:, :] - self.nodes[t0:t1, :]
         else:
+            #print(self.nodes.shape)
+            #print(t0)
+            #print(t1)
             diff = self.nodes[t0+1:t1+1, :] - self.nodes[t0:t1, :]
             
         return np.sum(np.sqrt(np.sum(np.power(diff, 2), axis=1)))
@@ -112,9 +153,14 @@ class Path:
             print(f'Non-integer refinement factor {factor} provided to Path.refine; setting value to {int(factor)}.')
             factor = int(factor)
             
+        self.resolution *= factor
+        
+        print('nodes before refinement: ', self.nodes.shape)
+
+
         if self.func != None:
-            self.set_from_function(self.func, self.t_range, self.resolution * factor)  
-            
+            self.set_from_function(self.func, self.t_range, self.resolution)  
+                        
         else:
             new_nodes = [self.nodes[0]]
             for i in range(1, len(self.nodes)):
@@ -127,8 +173,10 @@ class Path:
         self.length = self.get_total_length()
         self.node_lengths = self.get_node_lengths()
               
-    def calc_equidistant_nodes(self, resolution):
-        interval = self.length / (resolution)
+    def calc_equidistant_nodes(self):
+        original_resolution = self.resolution
+        
+        interval = self.length / self.resolution
         
         largest_segment = max([Vector.mag(self.nodes[i] - self.nodes[i-1]) for i in range(1, len(self.nodes))])
         refine_factor = int(np.ceil(largest_segment / interval))
@@ -139,16 +187,24 @@ class Path:
         
         self.refine(refine_factor)
         
-        interval = self.length / (resolution)
-
+        print('refine ', refine_factor)
+        
+        self.resolution = original_resolution # refine method updates resolution, but since we only want refined path for calculating equidistant path, we reset it manually here
+        interval = self.length / self.resolution
+ 
         self.nodes_eq = [self.nodes[0]]
         self.normals_eq = [self.normals[0]]
         self.rotations_eq = [self.rotations[0]]
         
-        for i in range(1, len(self.nodes)):
+        print('interval: ', interval)
+        print('length: ', self.length)
+        print('resolution: ', self.resolution)
+        
+        
+        for i in range(1, self.resolution * refine_factor - 1): 
             target_length = len(self.nodes_eq) * interval
             length_since_start = self.get_length_between(0, i)
-
+            
             if length_since_start >= target_length:
                 n0, n1 = self.nodes[i-1], self.nodes[i]
                 
@@ -174,7 +230,7 @@ class Path:
         
         self.length = self.get_total_length()
         self.node_lengths = self.get_node_lengths()
-        
+                
     def plot_xy_nodes(self, skip=1, equidistant=False):
         fig, ax = plt.subplots(1)
         
