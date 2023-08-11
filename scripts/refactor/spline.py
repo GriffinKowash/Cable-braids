@@ -1,4 +1,4 @@
-from geomdl import BSpline, convert
+from geomdl import BSpline, convert, fitting, exchange
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,6 +10,7 @@ class Spline:
                 setattr(self, key, params[key])
     
     def set_from_file(self, filepath):
+        # to-do: update for json
         with open(filepath, 'r') as file:
             lines = file.readlines()
 
@@ -38,14 +39,23 @@ class Spline:
         
         return points
     
-    def plot(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
+    def interpolate_points(self, points):
+        #points = exchange.import_csv(points)
+        curve = fitting.interpolate_curve(points, degree=3)
+        self.control_points = curve.ctrlpts
+        self.knot_vector = curve.knotvector
+        self.degree = curve.degree
+    
+    def plot(self, fig=None, ax=None, show=True):
+        if fig == None or ax == None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection='3d')
         
         points = self.get_points(300)
         control_points = np.array(self.control_points)
         
-        ax.plot(points[:, 0], points[:, 1], points[:, 2])
-        ax.scatter(control_points[:, 0], control_points[:, 1], control_points[:, 2])
+        ax.plot(points[:, 0], points[:, 1], points[:, 2], color='C0')
+        #ax.scatter(control_points[:, 0], control_points[:, 1], control_points[:, 2])
         
-        fig.show()
+        if show:
+            fig.show()

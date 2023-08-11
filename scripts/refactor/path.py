@@ -145,7 +145,7 @@ class Path:
         node_lengths = []
         for i in range(len(self.nodes)):
             node_lengths.append(self.get_length_between(0, i))
-        return node_lengths
+        return np.array(node_lengths)
             
     def refine(self, factor):
         # remake mesh with resolution increased by given integer factor

@@ -13,7 +13,7 @@ try:
             if arg == 'spline':
                 mode = arg
             elif arg == 'line':
-                print('Line mode is not currently supported via the Discovery API.')
+                mode = arg
             elif arg == 'points':
                 print('Point mode is not currently supported via the Discovery API.')
             else:
@@ -41,9 +41,17 @@ try:
         print('resolution: ', resolution, type(resolution))
         print('spline: ', spline_dict)
 
-        braid.set_path_from_spline(spline_dict, resolution, True)
+        braid.set_path_from_spline(spline_dict, resolution, False)
         
-    
+    elif mode == 'line':
+        with open(file_path + '\\line.json', 'r') as line_file:
+            line_dict = json.load(line_file)
+        print('resolution: ', resolution, type(resolution))
+        print('line: ', line_dict)
+        
+        start, end = line_dict['start'], line_dict['end']
+        braid.set_linear_path_between(start, end, resolution)
+        
     braid.construct(verbose=False)
     braid.save(output_dir)
         

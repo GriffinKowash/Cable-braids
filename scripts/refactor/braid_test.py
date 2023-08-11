@@ -5,8 +5,11 @@ Created on Thu Jun 22 15:56:30 2023
 @author: griffin.kowash
 """
 
+import json
 import numpy as np
+import matplotlib.pyplot as plt
 from braid import Braid
+from spline import Spline
 
 # Copied from old Params.set_from_args method
 """
@@ -62,30 +65,63 @@ parabola = {'range': (-10, 10), 'func': lambda t: (t, 0.02*10*t**2, 0*t)}
 quartic = {'range': (-2.5, 2.5), 'func': lambda t: (t, 0.25 * t**4, 0*t)}
 worm = {'range': (0, 16), 'func': lambda t: (0*t, 6*np.sin(t), t)}
 
-path_func = heart
+path_func = parabola
 
-#params = Params()
-#params.resolution = 300
-#params.set_path_from_function(path_func['func'], path_func['range'], equidistant=True)
-#params.set_from_spline
-#if params.set_from_file:
-#    params.set_path_from_file(params.output_dir + '\\path_data.csv', equidistant=True)
-#params.verbose = True
-#params.plotting = True
-#params.saving = True
-#params.plot_mode = Params.SURFACES
+#spline_path = r'C:\Users\griffin.kowash\AppData\Local\Temp\braids\braid_data\spline.json'
+#with open(spline_path, 'r') as spline_file:
+#    spline_dict = json.load(spline_file)
 
+"""
+### Vance Fig. 8 ###
+geo = {
+    's': 1,
+    'c': 42,
+    'n': 10,
+    'd': 0.015748,
+    'alpha_deg': 90 - 30,
+    'twist_deg': 0,#-7.53,
+    'wave_width': 0,#0.06,
+    'wave_sharpness': 0,#1/3,
+    'gap_shift_frac': 0,
+    'tanh_m': 0,#5,
+    'tanh_c': 0#0.5
+    }
+"""
 
-#braid = Braid(params)
-#braid.params.path.plot_xy_nodes(skip=1, both=False)#max(1, int(params.resolution/100)))
-#braid.params.path.plot_node_spacing(equidistant=True)
-    
-spline_file = r'C:\Users\griffin.kowash\AppData\Local\Temp\braids_spline_test\spline_data.csv'
+### Yazaki ###
+geo = {
+    's': 10,
+    'c': 58,
+    'n': 11,
+    'd': 0.16,
+    'alpha_deg': 90 - 30,
+    'twist_deg': 0,#-7.53,
+    'wave_width': 0.08,
+    'wave_sharpness': 0,#1/3,
+    'gap_shift_frac': 0,
+    'tanh_m': 5,
+    'tanh_c': 0.5
+    }
+
 
 braid = Braid()
-braid.set_geometry()
-braid.set_path_from_spline_file(spline_file, 600, equidistant=False)
-#braid.set_path_from_function(path_func['func'], path_func['range'], 600, equidistant=True)
-#braid.set_linear_path_between((-10,17,0), (3,44,10), 100)
-braid.construct(verbose=False)
-braid.plot(linewidth=3)
+braid.set_geometry(geo)
+#braid.set_path_from_spline(spline_dict, 600, equidistant=False)
+#braid.set_path_from_function(path_func['func'], path_func['range'], 200)
+#braid.set_linear_path_between((0,0,-34), (0,0,112.04), 2300)
+#braid.set_linear_path_between((0,0,0), (0,0,10), 400)
+braid.set_linear_path_between((0,0,-34), (0,0,136), 500)
+braid.construct(verbose=False, testing=False)
+braid.plot(linewidth=0.5, mode='lines')
+braid.save(r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\braids\Vance_k98_surface_r500', fmt='default')
+
+
+
+def calc_params(geo):
+    W = 4 * np.pi * geo['s'] / geo['c'] * np.cos((90 - geo['alpha_deg']) * np.pi / 180)
+    F = (geo['n']) * geo['d'] / W  # note that geo['n'] is currently being treated as number of strands + 1
+    K = 2*F - F**2
+    print(f'Shield coverage (K): {round(K * 100, 1)}%')
+    
+calc_params(geo)
+
