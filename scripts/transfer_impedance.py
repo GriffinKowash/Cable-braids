@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-#SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\Yazaki\original_100MHz'
-SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\new14b_thinwire\1GHz'
+SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\Vance_k85_isolines'
+#SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\Vance_k98_isolines_meshed'
 #SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\Vance_k85_surface\10GHz'
 #SOURCE_DIR2 = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\Vance_k85_surface\10GHz_large-domain_PEC'
 #SOURCE_DIR = r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\models\old\Yazaki_validation\Yazaki_cable_EMA3D\original_div-16'
@@ -50,9 +50,10 @@ it, i = current_data.T
 e = np.sqrt(ex**2 + ey**2 + ez**2)
 
 
-dt = 3.4e-13 #et[1] - et[0]
-efreq = np.fft.rfftfreq(efield_data.shape[0]) / dt
-ifreq = np.fft.rfftfreq(current_data.shape[0]) / dt
+edt = np.mean(et[1:] - et[:-1])
+idt = np.mean(it[1:] - it[:-1])
+efreq = np.fft.rfftfreq(efield_data.shape[0]) / edt
+ifreq = np.fft.rfftfreq(current_data.shape[0]) / idt
 i_fft = np.abs(np.fft.rfft(i, norm='forward')) * 2  #sketchy factor of 2, double check (apparently it's legit)
 e_fft = np.abs(np.fft.rfft(ez, norm='forward')) * 2
 

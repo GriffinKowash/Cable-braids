@@ -80,8 +80,9 @@ class Braid:
     def set_linear_path_between(self, p0, p1, resolution):
         self.path.set_linear_between(p0, p1, resolution)
     
-    def construct(self, verbose=False, testing=False):     
+    def construct(self, mode='line', verbose=False, testing=False):     
         carrier_phis = np.linspace(self.twist, self.twist + 2*np.pi, int(self.c/2), endpoint=False)
+        
         apply_power = lambda xs, p: np.array([x**p if x >= 0 else -(-x)**p for x in xs]) 
         
         def weave_func(ts, c=0.87, m=6.3):
@@ -117,8 +118,13 @@ class Braid:
                 if verbose:
                     print(f'\n\tCARRIER {i}')
                 
-                phi_offset = (self.d / np.sin(self.alpha)) * (self.n - 1) / (2 * self.s)
-                wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, self.n, endpoint=True)
+                if mode == 'line':
+                    phi_offset = (self.d / np.sin(self.alpha)) * (self.n - 1) / (2 * self.s)
+                    wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, self.n, endpoint=True)
+                
+                elif mode == 'surface':
+                    phi_offset = (self.d / np.sin(self.alpha)) * (self.n) / (2 * self.s)
+                    wire_phis = np.array([carrier_phi - phi_offset, carrier_phi + phi_offset])
                 
                 if sign == 1:
                     if i % 2 == 0:
@@ -165,8 +171,8 @@ class Braid:
                     self.data.append((chirality, i, j, r.T))
                     self.curves.append((r[0,:], r[1,:], r[2,:]))
         
-    def save(self, output_dir, fmt='default'):
-        Saving.save(self, output_dir, fmt)
+    def save(self, output_dir, fmt='default', mode='line'):
+        Saving.save(self, output_dir, fmt, mode)
         
     def plot(self, mode='lines', linewidth=1.5):
         Plotting.plot(self, mode, linewidth)
@@ -237,17 +243,17 @@ class Plotting:
 
 class Saving:
     @classmethod
-    def save(cls, braid, output_dir, fmt='default'):
+    def save(cls, braid, output_dir, fmt='default', mode='line'):
         output_dir = cls.check_output_dir(output_dir)
         
         if fmt == 'json':
-            config = cls.get_config(braid, fmt)
+            config = cls.get_config(braid, fmt, mode)
             data = {'config': config, 'data': braid.data}
             with open(f'{output_dir}\\braid.json', 'w') as outfile:
                 json.dump(data, outfile, cls=NumpyArrayEncoder)
         
         elif fmt == 'default':
-            cls.save_config(braid, output_dir)
+            cls.save_config(braid, output_dir, mode)
             for chirality, carrier, wire, data in braid.data:
                 np.savetxt(f'{output_dir}\\data_{chirality}_c{carrier}_w{wire}.csv', data, delimiter=',')
     
@@ -277,10 +283,15 @@ class Saving:
         return output_dir
         
     @staticmethod
-    def get_config(braid, fmt='default'):
+    def get_config(braid, fmt='default', mode='line'):
+        if mode == 'line':
+            N = braid.n
+        elif mode == 'surface':
+            N = 2
+        
         if fmt == 'default':
             return f"""carriers,{braid.c}
-wires per carrier,{braid.n}
+wires per carrier,{N}
 shield radius (mm),{braid.s}
 wire diameter (mm),{braid.d}
 carrier width (mm),{braid.carrier_width}
@@ -291,7 +302,7 @@ points per helix,{braid.path.resolution}"""
     
         elif fmt == 'json':
             return [('carriers', braid.c),
-                    ('wires per carrier', braid.n),
+                    ('wires per carrier', N),
                     ('shield radius (mm)', braid.s),
                     ('wire diameter (mm)', braid.d),
                     ('carrier width (mm)', braid.carrier_width),
@@ -301,8 +312,8 @@ points per helix,{braid.path.resolution}"""
                     ('points per helix', braid.path.resolution)]
         
     @classmethod
-    def save_config(cls, braid, output_dir):
-        config_text = cls.get_config(braid)
+    def save_config(cls, braid, output_dir, mode='line'):
+        config_text = cls.get_config(braid, fmt='default', mode=mode)
         config_file = open(output_dir + '\\config.txt', 'w')
         config_file.write(config_text)
         config_file.close()

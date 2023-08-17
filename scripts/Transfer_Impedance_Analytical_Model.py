@@ -17,27 +17,27 @@ NORMALIZE = False
 ######################################################
 
 ### Yazaki parameters ###
-
+"""
 u=1.257E-6
 c=16 # number of carriers
 n= 5 #number of strands per carrier
 d=0.12e-3 # strand diameter (36 gauge = 0.127mm)
-a=0.84e-3 #braid radius
+a=0.88e-3 #braid radius
 Dm = 2*a + 2*d  #mean braid diameter
 x = 19.15 # weave angle
 sigma = 2.12e7 # strand conductivity 
-
 """
-### Vance Figure 8 K98 parameters ###
+
+### Vance Figure 8 K85 parameters ###
 u=1.257E-6
-c=58 # number of carriers
-n=10 # number of strands per carrier
+c=42 # number of carriers
+n=9 # number of strands per carrier
 d=0.16e-3 # strand diameter
-a=10.0e-3 #braid radius
-Dm = 2*a + 2*d  #2*d # mean braid diameter
+a=9.92e-3 #braid radius
+Dm = 2*a + 2*d # mean braid diameter
 x = 30 # weave angle
 sigma = 6e7 # strand conductivity 
-"""
+
 """
 ### Sandbox parameters ###
 u=1.257E-6
@@ -53,7 +53,8 @@ sigma = 6e6 # strand conductivity
 freq_low, freq_high, step = int(1e4), int(1.0001e10), int(1e4)
 
 
-def calc_braid_impedance(model='Vance', **kwargs):  
+def calc_braid_impedance(model='Vance', **kwargs): 
+    Dm = 2*a + 2*d # mean braid diameter
     f20=(n*d*c) / (2*np.pi*Dm*np.cos(x*(np.pi/180)))
     #f20=(n*d*c) / (4*np.pi*a*np.cos(x*(np.pi/180)))
     k20 =2*f20-f20*f20
@@ -230,6 +231,7 @@ def calc_braid_impedance(model='Vance', **kwargs):
     ######################################################
     
     elif model.lower() == "demoulin": #Hole Inductance +  Tyni Braid Inductance + Porpoising 
+        Dm = 2*a + 2*d
         #m20 = 0.875*((np.pi*u)/(6*c))*np.power(opt20,1.5)*(e_sq20/(bige20-(1-e_sq20)*bigk20))*np.exp(-t20)
         #m20 = ((np.pi*u)/(6*c))*np.power(opt20,1.5)*(e_sq20/(bige20-(1-e_sq20)*bigk20))
         m20 = ((u*2*c)/(np.pi*np.cos(x*(np.pi/180))))*(w1/(np.pi*Dm))**2*np.exp(((-np.pi*d)/w1)-2)
@@ -320,6 +322,66 @@ def calc_braid_impedance(model='Vance', **kwargs):
         if __name__ != '__main__':
             return dataf, ztv
         
+
+    elif model.lower() == 'kley':
+
+        Dm = 2*a + 2.5*d
+        G0 = c*n*d / (2*np.pi*Dm)  # minimal filling factor
+        G = G0 / np.cos(x*np.pi/180)  # filling factor
+        B = G*(2-G)  # optical coverage
+        Rgs = 4 / (sigma*c*n*(d**2)*np.pi*np.cos(x*np.pi/180))  # DC resistance
+        
+        k1 = (np.pi/4) / ((2/3)*G0 + np.pi/10)
+        k2 = (np.pi/4) / ((2/3)*G0 + 3/8)
+        te = 12*G*np.cbrt((B**2)*d/Dm)
+        th = 9.6*G*np.cbrt((B**2)*d/Dm)
+        dR = 0.67*d/np.sqrt(np.cos(x*np.pi/180))
+        
+        dataf = []
+        data_wLs = []
+        data_Lt = []
+        data_Zr = []
+        data_Zt = []
+        
+        dataf = np.arange(freq_low, freq_high, step)
+            
+        delta = np.sqrt(2/(2*np.pi*dataf*u*sigma))
+        wLs = (1/(np.pi*sigma*delta*Dm)) * (10*np.pi*(G0**2)*np.cos(x*np.pi/180)*(1-G)*np.exp(-te) - (3.3/(2*np.pi*G0))*np.cos(2*k2*x*np.pi/180))
+        Lt = (u/c) * (0.875*np.pi/6 * (2 - np.cos(x*np.pi/180)*((1-G)**3)*np.exp(-th)) - (3.3/(2*np.pi*G0))*np.cos(2*k2*x*np.pi/180))
+        Zr = (2*dR*(1+1j)/delta) / (sigma*G0*np.cos(x*np.pi/180)*(np.pi**2)*Dm*d*np.sinh(dR*(1+1j)/delta))
+        Zt = Zr + 1j*2*np.pi*dataf*Lt + (1+1j)*wLs
+        
+        #ataf.append(f)
+        #data_wLs.append(wLs)
+        #data_Lt.append(Lt)
+        #data_Zr.append(np.abs(Zr))
+        #data_Zt.append(np.abs(Zt))
+
+        title = '%s Transfer Impedance'% model 
+        plt.figure(0)
+        if NORMALIZE:
+            plt.loglog(dataf, np.abs(Zt)/np.abs(data_Zt[0]), label = 'Kley Transfer Impedance (normalized)')
+        else:
+            plt.loglog(dataf, np.abs(Zt), label = 'Kley Transfer Impedance')
+        #plt.loglog(dataf,zt_mag20, label = '38.6 Degrees Simulated')
+        #plt.loglog(dataf,zt_sim, label = '38.6 Degrees Simulated')
+        plt.title(title,fontsize=16)
+        plt.legend()
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Transfer Impedance (Ohm/m)")
+        plt.xlim(1e4,2e10)  
+        plt.ylim(1e-6,1e2)  
+        plt.grid(True)
+        #plt.savefig(title, dpi=200)
+    
+        
+        if __name__ != '__main__':
+            return dataf, np.abs(Zt)
+        
+        rt20v = np.abs(Zr)
+        mt20 = np.abs(wLs + Lt)
+        
+        
     print('The transfer resistance is:', rt20v[0])
     print('The transfer Inductance is:',mt20)
     
@@ -328,9 +390,9 @@ def calc_braid_impedance(model='Vance', **kwargs):
 
 
 if __name__ == '__main__':
-    model = input('Which analytical model would you like to use to compute the transfer impedance for a braided shield? (Vance/Tyni/Demoulin):')
+    model = input('Which analytical model would you like to use to compute the transfer impedance for a braided shield? (Vance/Tyni/Demoulin/Kley):')
 
-    if model.lower() in ['vance', 'tyni', 'demoulin']:
+    if model.lower() in ['vance', 'tyni', 'demoulin', 'kley']:
         calc_braid_impedance(model)
     else:
         print('Enter a valid analytical model.')

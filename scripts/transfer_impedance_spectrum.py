@@ -13,15 +13,23 @@ FREQS = {'10MHz': 1e7, '20MHz': 2e7, '30MHz': 3e7, '50MHz': 5e7, '100MHz': 1e8, 
 #FREQS = {'100MHz': 1e8}
 
 #KOWASH = None
-KOWASH = {1e6: 0.0734, 3e6: 0.0744, 1e7: 0.0201, 2e7: 0.0189, 3e7: 0.0212, 5e7: 0.0284, 1e8: 0.0503, 3e8: 0.1458, 1e9: 0.4823}
+KOWASH = {1e5: 0.0883, 1e6: 0.0734, 3e6: 0.0744, 1e7: 0.0201, 2e7: 0.0189, 3e7: 0.0212, 5e7: 0.0284, 1e8: 0.0503, 3e8: 0.1458, 1e9: 0.4823}
 KOWASH_SURFACE = {5e7: 0.0380, 1e8: 0.0842, 3e8: 0.2450, 1e9: 0.6986}
+NEW14B_VOLTAGE = {1e9: 0.2646}
+K98_ISOLINES = {1e7: 0.0895, 1e8: 0.0018, 1e9: 0.3496}
+K98_SURFACE = {1e9: 0.0321}
+K85_SURFACE_MESH1 = {3e7: 3.275e-4, 1e8: 3.331e-3, 3e8: 0.01242, 1e9: 0.08378}
+K85_SURFACE_MESH2 = {3e7: 0.02124, 1e8: 0.07029, 3e8: 0.2163, 1e9: 1.173}
+K85_LINE_MESH2 = {1e6: 0.001573, 1e7: 0.01442, 3e7: 0.04312, 1e8: 0.1422, 3e8: 0.4279, 1e9: 2.293}
+K85_LINE_MESH3 = {3e7: 0.08676, 1e8: 0.2795, 3e8: 0.7945, 1e9: 4.089}
+K85_LINE_MESH4 = {1e8: 0.6198, 3e8: 1.744, 1e9: 9.129}
 #KOWASH_STD = {1e10: 4.62}
 #KOWASH = {1e6: 0.6311, 2.5e6: 0.14, 1e7: 0.5526, 2e7: 0.98, 3e7: 1.6, 5e7: 2.8, 1e8: 5.3}
 #VANCE_CODY = {1e4: 0.11, 1e5: 0.11, 1e6: 0.11, 2.5e6: 0.14, 1e7: 0.48, 2e7: 0.98, 3e7: 1.6, 5e7: 2.8, 1e8: 5.3}
 #VANCE = {1e4: 0.02803, 1e5: 0.02803, 1e6: 0.02403, 2.5e6: 0.01309, 1e7: 0.01807, 2e7: 0.03128, 3e7: 0.04661, 5e7: 0.07794, 1e8: 0.15585}
 YAZAKI = {1e4: 0.1, 1e5: 0.1, 1e6: 0.1, 1e7: 0.25, 2e7: 0.50, 3e7: 0.75, 5e7: 1.25, 1e8: 2.5}
 CUTOFF = None
-MODEL = 'Vance'
+MODEL = 'Tyni'
 
 def calc_zt(e_data, i_data, freq, cumulative=True):
     if not cumulative:
@@ -85,7 +93,7 @@ def print_zts(zts, val=None):
             print(f'{round(freq / 1e6, 1)} MHz: {round(zt, 4)} Ω/m')
 
 
-def plot(zts, val=None, ref=None):
+def plot(zts, val=None, ref=None, refname='Reference', testname='Test'):
     sns.set()
     fig, ax = plt.subplots(1)
     fig.suptitle('Cable braid transfer impedance, simulated')
@@ -95,13 +103,13 @@ def plot(zts, val=None, ref=None):
         fig.suptitle('Cable braid transfer impedance, simulated versus analytical')
         
     if ref != None:
-        #ax.plot(ref.keys(), ref.values(), linestyle='--', color='C2')
-        ax.scatter(ref.keys(), ref.values(), label='Reference', color='C2')
+        ax.plot(ref.keys(), ref.values(), linestyle='--', color='C2')
+        ax.scatter(ref.keys(), ref.values(), label=refname, color='C2')
         fig.suptitle('Cable braid transfer impedance, simulated versus analytical')
     
     #ax.plot(zts.keys(), zts.values(), linestyle='--', color='C1')
     ax.plot(zts.keys(), zts.values(), linestyle='-.', color='C1')
-    ax.scatter(zts.keys(), zts.values(), label='Test', color='C1')
+    ax.scatter(zts.keys(), zts.values(), label=testname, color='C1')
     
     ax.set_xscale('log')
     ax.set_yscale('log')
@@ -111,6 +119,8 @@ def plot(zts, val=None, ref=None):
 
     fig.tight_layout()
     fig.show()
+    
+    return fig, ax
     
 if KOWASH == None:
     KOWASH = {}
@@ -125,5 +135,6 @@ if KOWASH == None:
 dataf, ztv = calc_braid_impedance(MODEL)
 val = dict(zip(dataf, ztv))
 
-plot(KOWASH_SURFACE, val=val, ref=KOWASH)
-print_zts(KOWASH, val=val)
+fig, ax = plot(K85_LINE_MESH4, val=val, ref=K85_LINE_MESH3, refname='Mesh 2', testname='Mesh 3')
+print_zts(K85_LINE_MESH3, val=val)
+print_zts(K85_LINE_MESH4, val=val)

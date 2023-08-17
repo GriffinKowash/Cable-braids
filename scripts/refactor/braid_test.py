@@ -90,9 +90,9 @@ geo = {
 
 ### Yazaki ###
 geo = {
-    's': 10,
-    'c': 58,
-    'n': 11,
+    's': 10.08,
+    'c': 42,
+    'n': 9,
     'd': 0.16,
     'alpha_deg': 90 - 30,
     'twist_deg': 0,#-7.53,
@@ -109,11 +109,11 @@ braid.set_geometry(geo)
 #braid.set_path_from_spline(spline_dict, 600, equidistant=False)
 #braid.set_path_from_function(path_func['func'], path_func['range'], 200)
 #braid.set_linear_path_between((0,0,-34), (0,0,112.04), 2300)
-#braid.set_linear_path_between((0,0,0), (0,0,10), 400)
-braid.set_linear_path_between((0,0,-34), (0,0,136), 500)
-braid.construct(verbose=False, testing=False)
+braid.set_linear_path_between((0,0,0), (0,0,60), 200)
+#braid.set_linear_path_between((0,0,-34), (0,0,136), 500)
+braid.construct(mode='surface', verbose=False, testing=False)
 braid.plot(linewidth=0.5, mode='lines')
-braid.save(r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\braids\Vance_k98_surface_r500', fmt='default')
+braid.save(r'C:\Users\griffin.kowash\Documents\Projects\Cable_braids\braids\Vance_k80_surface', fmt='default', mode='surface')
 
 
 
