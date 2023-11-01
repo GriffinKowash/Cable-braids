@@ -8,6 +8,7 @@ Created on Fri May 26 08:49:21 2023
 import os, time, json
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from path import Path
 from spline import Spline
@@ -15,19 +16,20 @@ from spline import Spline
             
 class Braid:
     default_geo = {
-        'mode': 'body',      # modeling style (line, surface, body)
-        'ID': 1.00,             # inner diameter (mm)
-        'c': 16,                # number of carriers
-        'n': 4,                 # wires per carrier
-        'd': 0.127,             # wire diameter (mm)
-        'h': None,              # carrier separation ("None" for auto-calculate)
-        'alpha_deg': 18,        # weave angle (degrees; relative to cable axis)
-        'twist_deg': 0,         # overall rotation (degrees; seldom modified from default)
-        'weave_offset': 0,      # allows offsetting of weave function
-        'tanh_c': 0.5,          # weave function parameter
-        'tanh_m': 1,            # weave function parameter
-        'wire_spread': 1,       # artificial wire separation (fraction typically 1.0~1.1; only for body models)
-        'skip_factor': 1        # affects carrier resolution in surface models
+        'ID': 1.00,  #inner diameter
+        'wave_width': 0,
+        'wave_sharpness': 1,
+        'c': 16,
+        'n': 4,
+        'd': 0.131,
+        'h': None,
+        'alpha_deg': 72,
+        'twist_deg': 7.53,
+        'gap_shift_frac': 1/4,
+        'tanh_c': 0.87,
+        'tanh_m': 6.3,
+        'wire_spread': 1,
+        'skip_factor': 1
         }
     
     def __init__(self):
@@ -53,27 +55,21 @@ class Braid:
         self.alpha = self.alpha_deg * np.pi / 180
         self.twist = self.twist_deg * np.pi / 180
         if self.h == None:
-            self.h = self.calc_h()                                              # height between carriers as defined by Tyni
-        self.Dm = self.calc_Dm()                                                # mean diameter (center of carrier separation)
-        self.w = 1 / (self.Dm / 2 * (1 / np.tan(self.alpha)))                   # angular spatial frequency of helix (radians/mm)
-        self.p = self.c / (2 * np.pi * (1 / np.tan(self.alpha)) * self.Dm)      # "picks"/crossing frequency (1/mm)
-        self.pitch = np.pi * self.Dm * (1 / np.tan(self.alpha))                 # pitch height (mm)
-        self.carrier_width = self.d * self.n                                    # width of each carrier (mm)
-        self.weave_w = 2 * np.pi * self.p / 2                                   # angular frequency of weave pattern with respect to length (radians / mm)
-        
-        if self.mode == 'body':                                                 # ampltiude of weave pattern (mean radius as reference)
-            self.amplitude = (self.d + self.h) / 2                              # (extend to centerlines for body models)
-        elif self.mode == 'surface' or self.mode == 'line':                     # (extend to inner edge for line/surface models)
-            self.amplitude = (self.d + self.h) / 2                              
-        else:
-            print('Unrecognized mode ', self.mode)
+            self.h = self.calc_h()                                   # height between carriers as defined by Tyni
+        self.Dm = self.calc_Dm()
+        self.w = 1 / (self.s * np.tan(self.alpha))                   # angular spatial frequency of helix (radians/mm)
+        self.p = self.c / (4 * np.pi * np.tan(self.alpha) * self.s)  # "picks"/crossing frequency (1/mm)
+        self.pitch = 2 * np.pi * self.s * np.tan(self.alpha)         # pitch height (mm)
+        self.carrier_width = self.d * self.n                         # width of each carrier (mm)
+        self.wave_w = 2 * np.pi * self.p / 2                         # angular frequency of wire waves with respect to length (radians / mm)
+        self.amplitude = (self.d + self.h) / 2                       # ampltiude of weave pattern (currently assumes centerline modeling)
 
     def calc_Dm(self):
-        return self.ID + 2*self.d + self.h
+        return self.ID + self.d + self.h / 2
 
     def calc_h(self):
-        W = 2 * np.pi * self.ID / self.c * np.cos(self.alpha)
-        F = self.n * self.d / W
+        W = 4 * np.pi * (self.s) / self.c * np.cos(np.pi/2 - self.alpha)
+        F = (self.n - 1) * self.d / W
         b = self.n * self.d * (1 - F) / F
         h = 2 * self.d**2 / (b + self.d)
         print('h = ', h)
@@ -102,9 +98,11 @@ class Braid:
     def set_linear_path_between(self, p0, p1, resolution):
         self.path.set_linear_between(p0, p1, resolution)
     
-    def construct(self, verbose=False, testing=False):     
+    def construct(self, mode='line', verbose=False, testing=False):     
         carrier_phis = np.linspace(self.twist, self.twist + 2*np.pi, int(self.c/2), endpoint=False)
-                
+        
+        apply_power = lambda xs, p: np.array([x**p if x >= 0 else -(-x)**p for x in xs]) 
+        
         def weave_func(ts, c=0.87, m=6.3):
             ts = ts % (2*np.pi)
             vals = []
@@ -125,8 +123,8 @@ class Braid:
                 
             return np.array(vals)
         
-        gap_shift = 2*np.pi * self.weave_offset * (np.pi * self.Dm / (self.c * np.sin(self.alpha)) - self.carrier_width) * np.cos(self.alpha) / (2*np.pi / self.weave_w)  #aligns up/down weaving with gaps between carriers (ideally)
-        
+        gap_shift = 2*np.pi * self.gap_shift_frac * (np.pi * self.s / (self.c / 2 * np.cos(self.alpha)) - self.carrier_width) * np.sin(self.alpha) / (2*np.pi / self.wave_w)
+        #print(gap_shift)
         
         # loop over cw and ccw directions
         for chirality, sign in (('cw', -1), ('ccw', 1)):
@@ -137,59 +135,59 @@ class Braid:
             for i, carrier_phi in enumerate(carrier_phis):
                 if verbose:
                     print(f'\n\tCARRIER {i}')
-                    
-                # calculate angular positions of wires within carrier
-                if self.mode == 'body':
-                    # body: wires modeled along centerlines
-                    n_lines = self.n
-                    phi_offset = (self.d / np.cos(self.alpha)) * self.n / self.Dm * self.wire_spread
-                    wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, self.n, endpoint=True)
                 
-                elif self.mode == 'line':
-                    # line: wires modeled out to carrier edges to ensure correct aperture size
-                    n_lines = self.n
-                    phi_offset = (self.d / np.cos(self.alpha)) * (self.n + 1) / self.Dm
-                    
-                elif self.mode == 'surface':
-                    # surface: wires modeled out to carrier edges with optional skip factor
-                    n_lines = round((self.n + 1) / self.skip_factor)
-                    phi_offset = (self.d / np.cos(self.alpha)) * (self.n + 1) / self.Dm
-                    
-                wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, n_lines, endpoint=True)
-        
-                # calculate phase offset for each carrier to avoid intersection
+                if mode == 'line':
+                    phi_offset = (self.d / np.sin(self.alpha)) * (self.n) / (2 * self.s) * self.wire_spread
+                    wire_phis = np.linspace(carrier_phi - phi_offset, carrier_phi + phi_offset, round((self.n + 1) / self.skip_factor), endpoint=True)
+                
+                elif mode == 'surface':
+                    phi_offset = (self.d / np.sin(self.alpha)) * (self.n) / (2 * self.s) * self.wire_spread
+                    wire_phis = np.array([carrier_phi - phi_offset, carrier_phi + phi_offset])
+                
                 if sign == 1:
                     if i % 2 == 0:
-                        carrier_weave_offset = np.pi / 4
+                        wave_offset = np.pi / 4
                     elif i % 2 == 1:
-                        carrier_weave_offset = 5 * np.pi / 4
+                        wave_offset = 5 * np.pi / 4
                 elif sign == -1:
                     if i % 2 == 0:
-                        carrier_weave_offset = -np.pi / 4
+                        wave_offset = -np.pi / 4
                     elif i % 2 == 1:
-                        carrier_weave_offset = -5 * np.pi / 4
+                        wave_offset = -5 * np.pi / 4
                 
                 # loop over wires
                 for j, wire_phi in enumerate(wire_phis):
                     if verbose:
                         print(f'\t\twire {j}')
                     
-                    # calculate weave phase offset for each wire to align inflection points with gaps between carriers
-                    #wire_weave_offset = -sign * (j - (n_lines - 1) / 2) * (self.weave_w * self.d * np.sin(self.alpha) / np.tan(np.pi - 2*self.alpha))  #double check change of alpha definition
-                    wire_weave_offset = sign * self.Dm / (4 * np.tan(self.alpha)) * (wire_phi - carrier_phi) * self.weave_w
+                    # calculate position data
                     
-                    #if self.mode == 'line':
-                    #    wire_weave_offset = -sign * (j - (self.n - 1) / 2) * (self.weave_w * self.d * np.sin(self.alpha) / np.tan(np.pi - 2*self.alpha))  #double check change of alpha definition
-                    #    
-                    #elif self.mode == 'surface':
-                    #    if j == 0:
-                    #        wire_weave_offset = sign * (0 - (self.n - 1) / 2) * (self.d * self.weave_w / np.cos(2 * self.alpha))
-                    #    elif j == 1:
-                    #        wire_weave_offset = sign * ((self.n - 1) - (self.n - 1) / 2) * (self.d * self.weave_w / np.cos(2 * self.alpha))
-                       
-                    radius_offset = self.amplitude * weave_func(self.weave_w * self.path.node_lengths + carrier_weave_offset + wire_weave_offset + gap_shift, self.tanh_c, self.tanh_m)
+                    #wire_wave_offset = (j - (self.n - 1) / 2) * (self.d / self.s) * np.sin(self.alpha) * np.cos(self.alpha)
+                    #wire_wave_offset = sign * (j - (self.n - 1) / 2) * (2 * np.pi * self.d * self.p)
+                    
+                    #this controls the variation in radius as carriers weave over and under each other.
+                    #it is calculated to position each wire's inflection point in the center of the gap between carriers.
+                    #the if statement is a hacky way to account for how surface mode causes j to only iterate over [0,1]
+                    if mode == 'line':
+                        #wire_wave_offset = sign * (j - (self.n - 1) / 2) * (self.d * self.wave_w / np.sin(2 * (90 - self.alpha)))
+                        wire_wave_offset = -sign * (j - (self.n - 1) / 2) * (self.wave_w * self.d * np.cos(self.alpha) / np.tan(2*self.alpha))
+                        
+                    elif mode == 'surface':
+                        if j == 0:
+                            wire_wave_offset = sign * (0 - (self.n - 1) / 2) * (self.d * self.wave_w / np.sin(2 * (90 - self.alpha)))
+                        elif j == 1:
+                            wire_wave_offset = sign * ((self.n - 1) - (self.n - 1) / 2) * (self.d * self.wave_w / np.sin(2 * (90 - self.alpha)))
+                    
+                    if testing:
+                        wire_wave_offset += np.random.uniform(-np.pi, np.pi, 1)[0]
+                    
+                    #print(wire_wave_offset)
+                    
+                    #radius_offset = self.wave_width * apply_power(np.sin(self.wave_w * self.path.node_lengths + wave_offset + wire_wave_offset), self.wave_sharpness)
 
-                    s = self.Dm / 2 + radius_offset
+                    radius_offset = self.amplitude * weave_func(self.wave_w * self.path.node_lengths + wave_offset + wire_wave_offset + gap_shift, self.tanh_c, self.tanh_m)
+
+                    s = self.s + radius_offset
                     x = s * np.cos(sign * self.w * self.path.node_lengths + wire_phi)
                     y = s * np.sin(sign * self.w * self.path.node_lengths + wire_phi)
                     r = np.array([x, y, np.zeros(self.path.resolution)])
@@ -203,7 +201,6 @@ class Braid:
                     # store full data and nicely formatted curves
                     self.data.append((chirality, i, j, r.T))
                     self.curves.append((r[0,:], r[1,:], r[2,:]))
-        
         
     def save(self, output_dir, fmt='default', mode='line'):
         Saving.save(self, output_dir, fmt, mode)
@@ -231,6 +228,8 @@ class Plotting:
         
         axes.set_xlim(mins[0], maxs[0])
         axes.set_ylim(mins[1], maxs[1])
+        #axes.set_xlim(-1.2, 1.2)
+        #axes.set_ylim(-1.2, 1.2)
         axes.set_zlim(mins[2], maxs[2])
         axes.view_init(elev=90, azim=0, roll=0)
         if ortho:
@@ -316,24 +315,31 @@ class Saving:
         
     @staticmethod
     def get_config(braid, fmt='default', mode='line'):
+        if mode == 'line':
+            N = braid.n
+        elif mode == 'surface':
+            N = 2
+        
         if fmt == 'default':
             return f"""carriers,{braid.c}
-wires per carrier,{braid.n}
-inner diameter (mm),{braid.ID}
-mean diameter (mm),{braid.Dm}
+wires per carrier,{N}
+shield radius (mm),{braid.s}
 wire diameter (mm),{braid.d}
-weave angle (degrees),{braid.alpha * 180 / np.pi}
-carrier separation (mm):,{braid.h}
+carrier width (mm),{braid.carrier_width}
+crossing frequency (1/mm),{braid.p}
+pitch angle (degrees),{braid.alpha * 180 / np.pi}
+pitch height (mm),{braid.pitch}
 points per helix,{braid.path.resolution}"""
     
         elif fmt == 'json':
             return [('carriers', braid.c),
-                    ('wires per carrier', braid.n),
-                    ('inner diameter (mm)', braid.ID),
-                    ('mean diameter (mm)', braid.Dm),
+                    ('wires per carrier', N),
+                    ('shield radius (mm)', braid.s),
                     ('wire diameter (mm)', braid.d),
-                    ('weave angle (degrees)', braid.alpha_deg),
-                    ('carrier separation (mm)', braid.h),
+                    ('carrier width (mm)', braid.carrier_width),
+                    ('crossing frequency (1/mm)', braid.p),
+                    ('pitch angle (degrees)', braid.alpha_deg),
+                    ('pitch height (mm)', braid.pitch),
                     ('points per helix', braid.path.resolution)]
         
     @classmethod

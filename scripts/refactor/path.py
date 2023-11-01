@@ -102,7 +102,6 @@ class Path:
         points = np.array(func(t)).T
         self.set_from_points(points, equidistant)
         
-        
     def set_from_file(self, filepath, equidistant=False):
         points = np.loadtxt(filepath)
         self.set_from_points(points, equidistant)
